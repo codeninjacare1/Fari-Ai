@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Dashboard — Gainsboro Infotech</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"/>
+<style>
+:root{--g:#14A800;--gd:#0d7a00;--dark:#080f08;--dark2:#0d1a0d;--text:#e8f0e8;--muted:#7a9a7a;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--dark);color:var(--text);min-height:100vh;}
+header{background:var(--dark2);padding:18px 32px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(20,168,0,0.15);}
+.logo{font-size:16px;font-weight:700;color:#fff;}
+.logo span{color:var(--g);}
+.main{max-width:1100px;margin:0 auto;padding:40px 32px;}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px;}
+.stat-card{background:var(--dark2);border:1px solid rgba(20,168,0,0.1);border-radius:12px;padding:24px;text-align:center;}
+.stat-card .num{font-size:36px;font-weight:800;color:var(--g);}
+.stat-card .lbl{font-size:12px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px;}
+h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+h2 i{color:var(--g);}
+table{width:100%;border-collapse:collapse;background:var(--dark2);border-radius:12px;overflow:hidden;border:1px solid rgba(20,168,0,0.1);}
+th{padding:14px 16px;font-size:11px;color:var(--muted);text-align:left;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(20,168,0,0.1);}
+td{padding:14px 16px;font-size:13px;color:var(--text);border-bottom:1px solid rgba(20,168,0,0.06);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(20,168,0,0.03);}
+.badge{display:inline-block;padding:3px 9px;border-radius:4px;font-size:11px;background:rgba(20,168,0,0.1);color:var(--g);border:1px solid rgba(20,168,0,0.2);}
+a.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:13px;margin-left:auto;}
+a.back:hover{color:var(--text);}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Gainsboro <span>Infotech</span> · Dashboard</div>
+  <a href="/" class="back"><i class="ti ti-arrow-left"></i> Back to site</a>
+</header>
+<div class="main">
+  <div class="stats-row">
+    <div class="stat-card"><div class="num">{{ lead_count }}</div><div class="lbl">Total Leads</div></div>
+    <div class="stat-card"><div class="num">{{ sessions|length }}</div><div class="lbl">Chat Sessions</div></div>
+    <div class="stat-card"><div class="num">24/7</div><div class="lbl">Fari Uptime</div></div>
+  </div>
+
+  <h2><i class="ti ti-user-plus"></i> Recent Leads</h2>
+  {% if leads %}
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Project</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for l in leads %}
+      <tr>
+        <td>{{ l.name }}</td>
+        <td>{{ l.email }}</td>
+        <td>{{ l.company|default:"—" }}</td>
+        <td>{% if l.project_type %}<span class="badge">{{ l.project_type }}</span>{% else %}—{% endif %}</td>
+        <td>{{ l.created_at|date:"M d, Y · H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--muted);font-size:14px;">No leads yet. Share the landing page to start collecting!</p>
+  {% endif %}
+
+  <h2 style="margin-top:40px;"><i class="ti ti-messages"></i> Recent Chat Sessions</h2>
+  {% if sessions %}
+  <table>
+    <thead><tr><th>Session ID</th><th>Started</th><th>Last active</th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td style="font-family:monospace;font-size:12px;color:var(--muted);">{{ s.session_key|truncatechars:24 }}</td>
+        <td>{{ s.created_at|date:"M d, Y · H:i" }}</td>
+        <td>{{ s.updated_at|date:"M d, Y · H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--muted);font-size:14px;">No chat sessions yet.</p>
+  {% endif %}
+</div>
+</body>
+</html>
