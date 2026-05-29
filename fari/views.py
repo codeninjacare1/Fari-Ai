@@ -10,6 +10,7 @@ from .models import Lead, ChatSession, ChatMessage
 
 from django.http import HttpResponse
 from twilio.twiml.voice_response import VoiceResponse
+
 from .models import CallLog
 
 FARI_SYSTEM_PROMPT = """You are Fari, the friendly and professional AI Receptionist for Gainsboro Infotech — a Top-Rated Software Development Company for 2026.
@@ -264,5 +265,130 @@ def incoming_call(request):
         "Hello. Welcome to Fari AI Receptionist. How can I help you today?",
         voice='alice'
     )
+
+    return HttpResponse(str(response), content_type='text/xml')
+
+
+def process_intent(request):
+
+    speech_text = request.POST.get("SpeechResult", "").lower()
+
+    response = VoiceResponse()
+
+    print("User Said:", speech_text)
+
+    booking_keywords = [
+        "appointment",
+        "meeting",
+        "schedule",
+        "book",
+        "discovery call"
+    ]
+
+    if any(word in speech_text for word in booking_keywords):
+
+        gather = Gather(
+            input='speech',
+            action='/choose-slot/',
+            method='POST',
+            speech_timeout='auto'
+        )
+
+        gather.say(
+            "Sure. Which day works best for you? "
+            "For example tomorrow or Friday afternoon.",
+            voice='alice'
+        )
+
+        response.append(gather)
+
+    else:
+
+        response.say(
+            "Thank you. Our team will contact you shortly.",
+            voice='alice'
+        )
+
+    return HttpResponse(str(response), content_type='text/xml')
+
+
+# =========================================
+# CHOOSE SLOT
+# =========================================
+
+def choose_slot(request):
+
+    preferred_day = request.POST.get("SpeechResult", "")
+
+    response = VoiceResponse()
+
+    print("Preferred Day:", preferred_day)
+
+    gather = Gather(
+        input='speech',
+        action='/confirm-booking/',
+        method='POST',
+        speech_timeout='auto'
+    )
+
+    gather.say(
+        "I found two available slots. "
+        "Tomorrow at 3 PM "
+        "or Tomorrow at 5 PM. "
+        "Please say your preferred slot.",
+        voice='alice'
+    )
+
+    response.append(gather)
+
+    return HttpResponse(str(response), content_type='text/xml')
+
+
+# =========================================
+# CONFIRM BOOKING
+# =========================================
+
+def confirm_booking(request):
+
+    selected_slot = request.POST.get("SpeechResult", "")
+
+    caller_number = request.POST.get("From")
+
+    response = VoiceResponse()
+
+    print("Selected Slot:", selected_slot)
+
+    try:
+
+        twilio_client.messages.create(
+            body=(
+                f"Your requested appointment slot: {selected_slot}\n\n"
+                f"Please confirm here:\n"
+                f"{CALENDLY_LINK}"
+            ),
+            from_=TWILIO_PHONE_NUMBER,
+            to=caller_number
+        )
+
+        response.say(
+            "Perfect. I have sent a booking link to your phone.",
+            voice='alice'
+        )
+
+    except Exception as e:
+
+        print("SMS Error:", e)
+
+        response.say(
+            "Your appointment request was received.",
+            voice='alice'
+        )
+
+    response.say(
+        "Thank you for calling Gainsboro Infotech.",
+        voice='alice'
+    )
+
+    response.hangup()
 
     return HttpResponse(str(response), content_type='text/xml')
