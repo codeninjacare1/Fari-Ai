@@ -1,5 +1,7 @@
 from django.contrib import admin
 from .models import Lead, ChatSession, ChatMessage
+from .models import AgentSettings,StructuredMessage
+
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
@@ -15,3 +17,7 @@ class ChatSessionAdmin(admin.ModelAdmin):
 class ChatMessageAdmin(admin.ModelAdmin):
     list_display = ['session', 'role', 'content', 'created_at']
     list_filter = ['role']
+
+
+admin.site.register(AgentSettings)
+admin.site.register(StructuredMessage)

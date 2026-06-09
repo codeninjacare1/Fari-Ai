@@ -7,11 +7,33 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from .models import Lead, ChatSession, ChatMessage
-
 from django.http import HttpResponse
 from twilio.twiml.voice_response import VoiceResponse
-
 from .models import CallLog
+from twilio.twiml.voice_response import VoiceResponse, Gather
+from twilio.rest import Client
+from .models import AgentSettings,StructuredMessage
+from twilio.twiml.voice_response import Dial
+
+
+from .models import (
+    Lead,
+    ChatSession,
+    ChatMessage,
+    CallLog,
+    AgentSettings
+)
+
+
+twilio_client = Client(
+    settings.TWILIO_AUTH_TOKEN
+)
+
+# Twilio Number
+TWILIO_PHONE_NUMBER = settings.TWILIO_PHONE_NUMBER
+
+# Calendly Link
+CALENDLY_LINK = "https://calendly.com/gainsboroinfotech-discoverycall/discovery-call"
 
 FARI_SYSTEM_PROMPT = """You are Fari, the friendly and professional AI Receptionist for Gainsboro Infotech — a Top-Rated Software Development Company for 2026.
 
@@ -245,12 +267,166 @@ def dashboard(request):
 
 
 
+# def incoming_call(request):
+
+#     caller = request.POST.get("From")
+#     call_sid = request.POST.get("CallSid")
+
+#     # Save Call
+#     CallLog.objects.create(
+#         caller_number=caller,
+#         call_sid=call_sid,
+#         status="incoming"
+#     )
+
+#     response = VoiceResponse()
+
+#     response.say(
+#         "Hello. Welcome to Fari AI Receptionist. How can I help you today?",
+#         voice='alice'
+#     )
+
+#     return HttpResponse(str(response), content_type='text/xml')
 
 
+# def process_intent(request):
+
+#     speech_text = request.POST.get("SpeechResult", "").lower()
+
+#     response = VoiceResponse()
+
+#     print("User Said:", speech_text)
+
+#     booking_keywords = [
+#         "appointment",
+#         "meeting",
+#         "schedule",
+#         "book",
+#         "discovery call"
+#     ]
+
+#     if any(word in speech_text for word in booking_keywords):
+
+#         gather = Gather(
+#             input='speech',
+#             action='/choose-slot/',
+#             method='POST',
+#             speech_timeout='auto'
+#         )
+
+#         gather.say(
+#             "Sure. Which day works best for you? "
+#             "For example tomorrow or Friday afternoon.",
+#             voice='alice'
+#         )
+
+#         response.append(gather)
+
+#     else:
+
+#         response.say(
+#             "Thank you. Our team will contact you shortly.",
+#             voice='alice'
+#         )
+
+#     return HttpResponse(str(response), content_type='text/xml')
+
+
+# # =========================================
+# # CHOOSE SLOT
+# # =========================================
+
+# def choose_slot(request):
+
+#     preferred_day = request.POST.get("SpeechResult", "")
+
+#     response = VoiceResponse()
+
+#     print("Preferred Day:", preferred_day)
+
+#     gather = Gather(
+#         input='speech',
+#         action='/confirm-booking/',
+#         method='POST',
+#         speech_timeout='auto'
+#     )
+
+#     gather.say(
+#         "I found two available slots. "
+#         "Tomorrow at 3 PM "
+#         "or Tomorrow at 5 PM. "
+#         "Please say your preferred slot.",
+#         voice='alice'
+#     )
+
+#     response.append(gather)
+
+#     return HttpResponse(str(response), content_type='text/xml')
+
+
+# # =========================================
+# # CONFIRM BOOKING
+# # =========================================
+
+# def confirm_booking(request):
+
+#     selected_slot = request.POST.get("SpeechResult", "")
+
+#     caller_number = request.POST.get("From")
+
+#     response = VoiceResponse()
+
+#     print("Selected Slot:", selected_slot)
+
+#     try:
+
+#         twilio_client.messages.create(
+#             body=(
+#                 f"Your requested appointment slot: {selected_slot}\n\n"
+#                 f"Please confirm here:\n"
+#                 f"{CALENDLY_LINK}"
+#             ),
+#             from_=TWILIO_PHONE_NUMBER,
+#             to=caller_number
+#         )
+
+#         response.say(
+#             "Perfect. I have sent a booking link to your phone.",
+#             voice='alice'
+#         )
+
+#     except Exception as e:
+
+#         print("SMS Error:", e)
+
+#         response.say(
+#             "Your appointment request was received.",
+#             voice='alice'
+#         )
+
+#     response.say(
+#         "Thank you for calling Gainsboro Infotech.",
+#         voice='alice'
+#     )
+
+#     response.hangup()
+
+#     return HttpResponse(str(response), content_type='text/xml')
+
+
+
+# =========================================
+# INCOMING CALL
+# =========================================
+
+@csrf_exempt
 def incoming_call(request):
 
     caller = request.POST.get("From")
     call_sid = request.POST.get("CallSid")
+
+    # Load Agent Settings
+    settings_obj = AgentSettings.objects.first()
 
     # Save Call
     CallLog.objects.create(
@@ -261,21 +437,82 @@ def incoming_call(request):
 
     response = VoiceResponse()
 
-    response.say(
-        "Hello. Welcome to Fari AI Receptionist. How can I help you today?",
-        voice='alice'
+    # =====================================
+    # START RECORDING IF ENABLED
+    # =====================================
+
+    if settings_obj and settings_obj.recording_enabled:
+
+        response.record(
+            recording_status_callback='/recording-callback/',
+            recording_status_callback_method='POST',
+            play_beep=True,
+            trim='trim-silence',
+            max_length=3600
+        )
+
+    # =====================================
+    # SPEECH INPUT
+    # =====================================
+
+    gather = Gather(
+        input='speech',
+        action='/process-intent/',
+        method='POST',
+        speech_timeout='auto'
     )
 
-    return HttpResponse(str(response), content_type='text/xml')
+    greeting_message = (
+        settings_obj.greeting_message
+        if settings_obj
+        else "Hello. Welcome to Fari AI Receptionist."
+    )
 
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
 
+    gather.say(
+        greeting_message,
+        voice=voice_name
+    )
+
+    response.append(gather)
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
+
+# =========================================
+# PROCESS INTENT
+# =========================================
+
+@csrf_exempt
 def process_intent(request):
 
-    speech_text = request.POST.get("SpeechResult", "").lower()
+    speech_text = request.POST.get(
+        "SpeechResult",
+        ""
+    ).lower()
 
     response = VoiceResponse()
 
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
+
     print("User Said:", speech_text)
+
+    # =====================================
+    # KEYWORDS
+    # =====================================
 
     booking_keywords = [
         "appointment",
@@ -284,6 +521,26 @@ def process_intent(request):
         "book",
         "discovery call"
     ]
+
+    sales_keywords = [
+        "sales",
+        "pricing",
+        "quote",
+        "project",
+        "development"
+    ]
+
+    support_keywords = [
+        "support",
+        "help",
+        "issue",
+        "problem", 
+        "bug"
+    ]
+
+    # =====================================
+    # APPOINTMENT FLOW
+    # =====================================
 
     if any(word in speech_text for word in booking_keywords):
 
@@ -297,30 +554,97 @@ def process_intent(request):
         gather.say(
             "Sure. Which day works best for you? "
             "For example tomorrow or Friday afternoon.",
-            voice='alice'
+            voice=voice_name
         )
 
         response.append(gather)
 
-    else:
+    # =====================================
+    # SALES TEAM TRANSFER
+    # =====================================
+
+    elif any(word in speech_text for word in sales_keywords):
 
         response.say(
-            "Thank you. Our team will contact you shortly.",
-            voice='alice'
+            "Connecting you to our sales team.",
+            voice=voice_name
         )
 
-    return HttpResponse(str(response), content_type='text/xml')
+        dial = Dial(
+            callerId=TWILIO_PHONE_NUMBER
+        )
+
+        dial.number("+12545663461")
+
+        response.append(dial)
+
+    # =====================================
+    # SUPPORT TEAM TRANSFER
+    # =====================================
+
+    elif any(word in speech_text for word in support_keywords):
+
+        response.say(
+            "Connecting you to support.",
+            voice=voice_name
+        )
+
+        dial = Dial(
+            callerId=TWILIO_PHONE_NUMBER
+        )
+
+        dial.number("+12545663461")
+
+        response.append(dial)
+
+    # =====================================
+    # DEFAULT RESPONSE
+    # =====================================
+
+    else:
+
+        gather = Gather(
+            input='speech',
+            action='/save-name/',
+            method='POST',
+            speech_timeout='auto'
+        )
+
+        gather.say(
+            "Before we end the call, "
+            "may I know your full name?",
+            voice=voice_name
+        )
+
+        response.append(gather)
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
 
 
 # =========================================
 # CHOOSE SLOT
 # =========================================
 
+@csrf_exempt
 def choose_slot(request):
 
-    preferred_day = request.POST.get("SpeechResult", "")
+    preferred_day = request.POST.get(
+        "SpeechResult",
+        ""
+    )
 
     response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
 
     print("Preferred Day:", preferred_day)
 
@@ -336,25 +660,40 @@ def choose_slot(request):
         "Tomorrow at 3 PM "
         "or Tomorrow at 5 PM. "
         "Please say your preferred slot.",
-        voice='alice'
+        voice=voice_name
     )
 
     response.append(gather)
 
-    return HttpResponse(str(response), content_type='text/xml')
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
 
 
 # =========================================
 # CONFIRM BOOKING
 # =========================================
 
+@csrf_exempt
 def confirm_booking(request):
 
-    selected_slot = request.POST.get("SpeechResult", "")
+    selected_slot = request.POST.get(
+        "SpeechResult",
+        ""
+    )
 
     caller_number = request.POST.get("From")
 
     response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
 
     print("Selected Slot:", selected_slot)
 
@@ -362,7 +701,8 @@ def confirm_booking(request):
 
         twilio_client.messages.create(
             body=(
-                f"Your requested appointment slot: {selected_slot}\n\n"
+                f"Your requested appointment slot: "
+                f"{selected_slot}\n\n"
                 f"Please confirm here:\n"
                 f"{CALENDLY_LINK}"
             ),
@@ -372,7 +712,7 @@ def confirm_booking(request):
 
         response.say(
             "Perfect. I have sent a booking link to your phone.",
-            voice='alice'
+            voice=voice_name
         )
 
     except Exception as e:
@@ -381,14 +721,253 @@ def confirm_booking(request):
 
         response.say(
             "Your appointment request was received.",
-            voice='alice'
+            voice=voice_name
         )
 
     response.say(
         "Thank you for calling Gainsboro Infotech.",
-        voice='alice'
+        voice=voice_name
     )
 
     response.hangup()
 
-    return HttpResponse(str(response), content_type='text/xml')
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
+
+
+# =========================================
+# RECORDING CALLBACK
+# =========================================
+
+@csrf_exempt
+def recording_callback(request):
+
+    recording_url = request.POST.get("RecordingUrl")
+
+    call_sid = request.POST.get("CallSid")
+
+    recording_sid = request.POST.get("RecordingSid")
+
+    print("Recording URL:", recording_url)
+
+    print("Call SID:", call_sid)
+
+    try:
+
+        call = CallLog.objects.get(
+            call_sid=call_sid
+        )
+
+        call.recording_url = recording_url
+
+        call.recording_sid = recording_sid
+
+        call.status = "recorded"
+
+        call.save()
+
+    except Exception as e:
+
+        print("Save Recording Error:", e)
+
+    return HttpResponse("Recording Saved")
+
+
+
+
+
+
+# =========================================
+# SAVE NAME
+# =========================================
+
+@csrf_exempt
+def save_name(request):
+
+    caller_name = request.POST.get(
+        "SpeechResult",
+        ""
+    )
+
+    request.session['caller_name'] = caller_name
+
+    response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
+
+    gather = Gather(
+        input='speech',
+        action='/save-reason/',
+        method='POST',
+        speech_timeout='auto'
+    )
+
+    gather.say(
+        "Please tell me the reason for your call.",
+        voice=voice_name
+    )
+
+    response.append(gather)
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
+
+
+# =========================================
+# SAVE REASON
+# =========================================
+
+@csrf_exempt
+def save_reason(request):
+
+    reason = request.POST.get(
+        "SpeechResult",
+        ""
+    )
+
+    request.session['reason'] = reason
+
+    response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
+
+    gather = Gather(
+        input='speech',
+        action='/save-number/',
+        method='POST',
+        speech_timeout='auto'
+    )
+
+    gather.say(
+        "Please say your callback number.",
+        voice=voice_name
+    )
+
+    response.append(gather)
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
+
+
+# =========================================
+# SAVE NUMBER
+# =========================================
+
+@csrf_exempt
+def save_number(request):
+
+    callback_number = request.POST.get(
+        "SpeechResult",
+        ""
+    )
+
+    request.session['callback_number'] = callback_number
+
+    response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
+
+    gather = Gather(
+        input='speech',
+        action='/save-message/',
+        method='POST',
+        speech_timeout='auto'
+    )
+
+    gather.say(
+        "Please leave your message after the beep.",
+        voice=voice_name
+    )
+
+    response.append(gather)
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
+
+
+# =========================================
+# SAVE MESSAGE
+# =========================================
+
+@csrf_exempt
+def save_message(request):
+
+    message = request.POST.get(
+        "SpeechResult",
+        ""
+    )
+
+    caller_name = request.session.get(
+        'caller_name',
+        ''
+    )
+
+    reason = request.session.get(
+        'reason',
+        ''
+    )
+
+    callback_number = request.session.get(
+        'callback_number',
+        ''
+    )
+
+    # =====================================
+    # SAVE TO DATABASE
+    # =====================================
+
+    StructuredMessage.objects.create(
+        caller_name=caller_name,
+        reason=reason,
+        callback_number=callback_number,
+        message=message
+    )
+
+    response = VoiceResponse()
+
+    settings_obj = AgentSettings.objects.first()
+
+    voice_name = (
+        settings_obj.voice
+        if settings_obj
+        else "alice"
+    )
+
+    response.say(
+        "Thank you. Your message has been saved successfully."
+        "Our team will contact you shortly.",
+        voice=voice_name
+    )
+
+    response.hangup()
+
+    return HttpResponse(
+        str(response),
+        content_type='text/xml'
+    )
