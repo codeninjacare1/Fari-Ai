@@ -66,9 +66,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Twilio Settings
-TWILIO_AUTH_TOKEN = "6ecf41314517025a2280361b5b26545b"
-TWILIO_PHONE_NUMBER = "+12545663461"
+# TWILIO_AUTH_TOKEN = "6ecf41314517025a2280361b5b26545b"
+# TWILIO_PHONE_NUMBER = "+12545663461"
 
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
