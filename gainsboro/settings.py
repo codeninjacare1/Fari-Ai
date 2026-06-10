@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'gainsboro-infotech-fari-ai-2026-secret-key-change-in-prod'
@@ -62,13 +65,12 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Anthropic API Key — set your key here or via environment variable
 
 
-# Twilio Settings
-# TWILIO_AUTH_TOKEN = "6ecf41314517025a2280361b5b26545b"
-# TWILIO_PHONE_NUMBER = "+12545663461"
 
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 
@@ -77,4 +79,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+
+
+TWILIO_ACCOUNT_SID = "your_account_sid"
+TWILIO_AUTH_TOKEN = "your_auth_token"
+TWILIO_PHONE_NUMBER = "+12545663461"
